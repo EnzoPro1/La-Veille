@@ -99,6 +99,15 @@ def test_topic_filter_includes_both(session: Session, client: TestClient) -> Non
     assert "Article piégé" not in body
 
 
+def test_empty_filter_value_means_no_filter(session: Session, client: TestClient) -> None:
+    """Le formulaire poste `lang=&topic=` quand rien n'est choisi : cliquer
+    "Filtrer" sans selection doit rendre la liste, pas un 422."""
+    ingest(session, make_feed(session, "fr-feed", lang="fr"), "rss20_ok.xml")
+    response = client.get("/", params={"lang": "", "topic": ""})
+    assert response.status_code == 200
+    assert "Une faille critique" in response.text
+
+
 def test_unknown_filter_value_is_rejected(client: TestClient) -> None:
     assert client.get("/", params={"lang": "de"}).status_code == 422
     assert client.get("/", params={"topic": "crypto"}).status_code == 422

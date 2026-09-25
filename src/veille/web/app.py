@@ -10,6 +10,7 @@ from fastapi import Depends, FastAPI, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BeforeValidator
 from sqlalchemy.orm import Session
 
 from veille.config import settings
@@ -27,8 +28,18 @@ templates = Jinja2Templates(directory=BASE_DIR / "templates")
 templates.env.filters.update(FILTERS)
 
 SessionDep = Annotated[Session, Depends(get_session)]
-LangParam = Annotated[Literal["fr", "en"] | None, Query()]
-TopicParam = Annotated[Literal["ai", "sec", "both"] | None, Query()]
+
+
+def _blank_is_absent(value: object) -> object:
+    """Le <select> "toutes" du formulaire envoie `lang=` : une chaine vide est
+    l'absence de filtre, pas une valeur invalide. Sans ca, cliquer "Filtrer"
+    sans choisir de langue rend un 422 JSON au lieu de la liste."""
+    return None if value == "" else value
+
+
+EmptyAsNone = BeforeValidator(_blank_is_absent)
+LangParam = Annotated[Literal["fr", "en"] | None, EmptyAsNone, Query()]
+TopicParam = Annotated[Literal["ai", "sec", "both"] | None, EmptyAsNone, Query()]
 
 
 @app.get("/", response_class=HTMLResponse)

@@ -106,6 +106,24 @@ intervalles et des périodes datées. La fenêtre se termine à l'instant prése
 non au dernier run : sans cela, un corpus arrêté depuis dix jours afficherait un
 sans-faute.
 
+## Quand la normalisation change
+
+Un flux ne réexpose que sa page courante : un correctif de sanitisation ne
+touche donc que les articles encore en ligne. `raw_summary` est conservé tel que
+livré pour pouvoir rejouer la normalisation sur tout le corpus :
+
+```bash
+make resanitize          # simulation : combien d'articles changeraient, par flux
+make repair-summaries    # sauvegarde vérifiée, puis recalcul de summary_clean et content_hash
+```
+
+`repair-summaries` s'arrête avant toute écriture si la sauvegarde échoue.
+
+`updated_at` n'est pas modifié : rejouer la normalisation n'est pas une révision
+par la source. Le hash est recalculé en même temps, sinon le prochain passage du
+flux prendrait la correction pour une révision. La commande refuse de tourner
+pendant une ingestion (code retour 3).
+
 ## Développement
 
 ```bash

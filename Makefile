@@ -1,7 +1,7 @@
 # Le conteneur est le seul environnement d'execution : Python 3.12 n'existe pas sur l'hote.
 COMPOSE ?= docker compose
 
-.PHONY: up down logs test lint fmt ingest seed shell psql
+.PHONY: up down logs test lint fmt ingest seed resanitize repair-summaries shell psql
 
 up:            ## Construit et demarre app + db (migrations + seed automatiques)
 	$(COMPOSE) up -d --build
@@ -29,6 +29,14 @@ seed:          ## Resynchronise feeds.yaml vers la table feed
 
 ingest:        ## Ingere tous les flux (make ingest FEED=cert-fr pour un seul)
 	$(COMPOSE) exec app python -m veille ingest $(if $(FEED),--feed $(FEED),)
+
+resanitize:    ## Recalcule les resumes stockes (simulation ; make resanitize APPLY=1 pour ecrire)
+	$(COMPOSE) exec app python -m veille resanitize $(if $(APPLY),--apply,)
+
+# `backup` en prerequis : si le dump echoue ou ne se relit pas, make s'arrete
+# AVANT d'ecrire quoi que ce soit en base.
+repair-summaries: backup  ## Sauvegarde verifiee, puis recalcule les resumes stockes
+	$(COMPOSE) exec -T app python -m veille resanitize --apply
 
 # --- Sauvegarde -------------------------------------------------------------
 # Piege B : pg_dump ecrit DANS le conteneur, sur le montage ./backups. Le dump

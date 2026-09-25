@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from veille.normalize.html import sanitize, strip_tags
+from conftest import NOW, read_fixture
+from veille.ingest.parse import parse_feed
+from veille.normalize.html import sanitize, strip_tags, unescape_escaped_markup
 from veille.normalize.text import clean_title, content_hash, fix_double_escaping, normalize_ws
 
 HOSTILE = (
@@ -122,3 +124,84 @@ def test_content_hash_ignores_cosmetic_markup_changes() -> None:
     first = content_hash("Titre", strip_tags("<p>Un <b>resume</b></p>"))
     second = content_hash("Titre", strip_tags("<div>Un <strong>resume</strong></div>"))
     assert first == second
+
+
+# ------------------------------------------------ HTML livre echappe (LeMagIT)
+
+ESCAPED_ARTICLE = (
+    "&lt;p&gt;Premier paragraphe.&lt;/p&gt; \n"
+    '&lt;p&gt;Voir &lt;a href="https://example.com/a"&gt;la source&lt;/a&gt;, '
+    "Junie&amp;nbsp;CLI.&lt;/p&gt;"
+)
+
+
+def test_escaped_html_summary_is_restored_then_sanitized() -> None:
+    cleaned = sanitize(ESCAPED_ARTICLE)
+    assert cleaned is not None
+    assert "<p>" in cleaned, "le balisage echappe redevient du balisage"
+    assert 'href="https://example.com/a"' in cleaned
+    assert "noopener" in cleaned, "et passe par nh3 comme n'importe quel lien"
+    text = strip_tags(cleaned)
+    assert "<p>" not in text and "&lt;" not in text
+    assert text.startswith("Premier paragraphe. Voir la source, Junie")
+    assert "&nbsp;" not in text
+
+
+def test_escaped_script_is_removed_by_nh3_not_displayed() -> None:
+    """Desechapper reintroduit `<script>` : c'est nh3 qui doit le retirer, et la
+    charge ne doit survivre sous AUCUNE forme, pas meme comme texte visible."""
+    raw = (
+        "&lt;p&gt;Texte légitime.&lt;/p&gt;"
+        "&lt;script&gt;alert('xss')&lt;/script&gt;"
+        '&lt;img src="x" onerror="alert(1)"&gt;'
+        '&lt;a href="javascript:alert(2)"&gt;clic&lt;/a&gt;'
+    )
+    cleaned = sanitize(raw)
+    assert cleaned is not None
+    lowered = cleaned.lower()
+    for needle in ("script", "alert(", "onerror", "javascript:", "<img", "&lt;"):
+        assert needle not in lowered, needle
+    assert strip_tags(cleaned) == "Texte légitime.clic"
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        # texte brut qui cite des comparaisons : aucune balise echappee
+        "Affected versions are &lt; 0.6.2 and &gt;= 0.5.0.",
+        # vrai HTML qui PARLE de HTML : les entites sont le contenu
+        "<p>Au-dela d'un simple <code>&lt;circle&gt;</code>.</p>",
+        "<p>&lt;p&gt;cite&lt;/p&gt;</p>",
+        # charge citee en texte par un article de securite, sans structure
+        "La charge &lt;script&gt;alert(1)&lt;/script&gt; passe le filtre.",
+        # balise de structure echappee, mais pas en tete de resume
+        "Utiliser &lt;p&gt;texte&lt;/p&gt; pour un paragraphe.",
+        # ouverte en tete mais jamais refermee (resume tronque)
+        "&lt;p&gt;Resume tronque sans fermeture",
+    ],
+)
+def test_text_that_merely_mentions_html_is_left_escaped(raw: str) -> None:
+    assert unescape_escaped_markup(raw) == raw
+
+
+def test_escaped_body_fixture_end_to_end() -> None:
+    """Le flux reel : <body> non standard, que feedparser rend en entites."""
+    parsed = parse_feed(read_fixture("escaped_body.xml"), fetched_at=NOW)
+    by_url = {entry.url_canonical: entry for entry in parsed.entries}
+
+    article = by_url["https://exemple-echappe.test/actualites/jetbrains-air"]
+    assert article.raw_summary is not None
+    assert article.raw_summary.startswith("&lt;p&gt;"), "le brut reste tel que livre"
+    assert article.summary_clean is not None
+    clean = article.summary_clean.lower()
+    assert "<p>" in clean
+    for needle in ("script", "alert(", "onerror", "<img", "&lt;"):
+        assert needle not in clean, needle
+    text = strip_tags(article.summary_clean)
+    assert text.startswith("Jetbrains tente de prendre de la hauteur. L")
+    assert "éditeur connu pour ses IDE a lancé Junie" in text
+    assert "Air devient une suite" in text
+    assert article.content_hash == content_hash(article.title, text)
+
+    plain = by_url["https://exemple-echappe.test/actualites/texte-brut"]
+    assert strip_tags(plain.summary_clean) == "Affected versions are < 0.6.2 and >= 0.5.0."

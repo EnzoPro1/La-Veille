@@ -1,4 +1,4 @@
-"""CLI : `python -m veille ingest [--feed ID]` et `python -m veille seed`.
+"""CLI : `python -m veille ingest [--feed ID]`, `seed` et `resanitize [--apply]`.
 
 Point d'entree unique. Aucune logique metier ici : elle appelle le pipeline et
 met en forme le resultat.
@@ -15,6 +15,7 @@ from veille.db import session_scope
 from veille.errors import IngestLockedError, VeilleError
 from veille.feeds_config import load_feeds
 from veille.ingest.pipeline import run_ingestion
+from veille.resanitize import resanitize_articles
 from veille.schemas import FeedSpec
 from veille.seed import seed_feeds
 
@@ -34,8 +35,20 @@ def main(argv: list[str] | None = None) -> int:
     ingest = subparsers.add_parser("ingest", help="ingere les flux")
     ingest.add_argument("--feed", metavar="ID", help="n'ingerer que ce flux (id de feeds.yaml)")
 
+    resanitize = subparsers.add_parser(
+        "resanitize",
+        help="reapplique la normalisation des resumes aux articles stockes (simulation par defaut)",
+    )
+    resanitize.add_argument(
+        "--apply", action="store_true", help="ecrire les corrections au lieu de les compter"
+    )
+
     args = parser.parse_args(argv)
     _configure_logging()
+
+    # Avant load_feeds : ne lit que la base, feeds.yaml n'a rien a y voir.
+    if args.command == "resanitize":
+        return _run_resanitize(apply=args.apply)
 
     try:
         specs = load_feeds()
@@ -98,6 +111,21 @@ def _run_ingest(specs: list[FeedSpec], *, feed_id: str | None) -> int:
     # Code retour non nul seulement si TOUS les flux ont echoue : un flux mort
     # est un incident normal, pas un echec du run.
     return 0 if n_ok else 1
+
+
+def _run_resanitize(*, apply: bool) -> int:
+    try:
+        with session_scope() as session:
+            report = resanitize_articles(session, apply=apply)
+    except IngestLockedError as exc:
+        logger.info("%s", exc)
+        return EXIT_LOCKED
+
+    for slug, count in sorted(report.changed.items()):
+        print(f"  {slug:24} {count:>5}")
+    verb = "corriges" if report.applied else "a corriger (relancer avec --apply)"
+    print(f"{report.scanned} articles lus, {report.n_changed} {verb}")
+    return 0
 
 
 def _configure_logging() -> None:

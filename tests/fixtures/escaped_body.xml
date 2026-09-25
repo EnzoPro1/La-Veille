@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- Calque sur https://www.lemagit.fr/rss/ContentSyndication.xml (releve le
+     2026-09-25) : l'article entier dans un <body> non standard, en HTML echappe
+     une fois, que feedparser rend en entites. La charge <script> echappee est
+     ajoutee pour le test : nh3 doit la retirer une fois le HTML restitue. -->
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel>
+        <title>Flux a corps echappe</title>
+        <link>https://exemple-echappe.test/</link>
+        <description>HTML livre comme texte dans un element body.</description>
+        <item>
+            <body>&lt;p&gt;Jetbrains tente de prendre de la hauteur.&lt;/p&gt;
+&lt;p&gt;L’éditeur connu pour ses &lt;a href="https://exemple-echappe.test/definition/IDE"&gt;IDE&lt;/a&gt; a lancé Junie&amp;nbsp;CLI.&lt;/p&gt;
+&lt;section class="section main-article-chapter" data-menu-title="Air"&gt;
+ &lt;h2 class="section-title"&gt;&lt;i class="icon" data-icon="1"&gt;&lt;/i&gt;Air devient une suite&lt;/h2&gt;
+ &lt;p&gt;Air est disponible depuis les IDE.&lt;/p&gt;&lt;script&gt;alert('xss')&lt;/script&gt;&lt;img src="x" onerror="alert(1)"&gt;
+&lt;/section&gt;</body>
+            <description>Plus connu pour IntelliJ, Jetbrains développe une plateforme agentique.</description>
+            <link>https://exemple-echappe.test/actualites/jetbrains-air</link>
+            <guid isPermaLink="false">urn:echappe:1</guid>
+            <pubDate>Wed, 23 Sep 2026 08:30:00 +0000</pubDate>
+        </item>
+        <item>
+            <description>Affected versions are &amp;lt; 0.6.2 and &amp;gt;= 0.5.0.</description>
+            <link>https://exemple-echappe.test/actualites/texte-brut</link>
+            <guid isPermaLink="false">urn:echappe:2</guid>
+            <pubDate>Wed, 23 Sep 2026 07:30:00 +0000</pubDate>
+        </item>
+    </channel>
+</rss>

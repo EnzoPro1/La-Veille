@@ -24,8 +24,8 @@ regroupés par jour de parution, du plus récent au plus ancien, sans fin.
   </tr>
 </table>
 
-- **Une rubrique par jour**, au jour de Paris : un article publié à 23 h 30 UTC
-  en été appartient au lendemain. « Aujourd'hui » et « Hier » sont nommés.
+- **Une rubrique par jour** : « Aujourd'hui », « Hier », puis la date. Les jours
+  suivent l'heure de Paris.
 - **Une carte par article** : source, thème, titre, puis le début du résumé
   (7 lignes au plus), l'heure et la langue. Toute la carte mène à l'article.
 - **La une du jour** : le premier article de chaque jour occupe deux colonnes,

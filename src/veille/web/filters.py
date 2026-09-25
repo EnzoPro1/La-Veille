@@ -3,7 +3,9 @@ ailleurs : la base ne contient que de l'UTC."""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from collections.abc import Iterable
+from datetime import UTC, date, datetime, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from veille.normalize.html import strip_tags
@@ -31,6 +33,70 @@ def datetime_attr(value: datetime) -> str:
 
 def absolute_date(value: datetime) -> str:
     return to_paris(value).strftime("%d/%m/%Y %H:%M")
+
+
+#: En dur plutot que via locale : setlocale depend de l'image et du poste, et
+#: une page qui passe a "Thursday" selon la machine n'est pas une page fiable.
+WEEKDAYS = ("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche")
+MONTHS = (
+    "janvier",
+    "février",
+    "mars",
+    "avril",
+    "mai",
+    "juin",
+    "juillet",
+    "août",
+    "septembre",
+    "octobre",
+    "novembre",
+    "décembre",
+)
+
+
+def _as_paris_date(value: datetime | date) -> date:
+    return to_paris(value).date() if isinstance(value, datetime) else value
+
+
+def day_label(value: datetime | date) -> str:
+    """Date longue en francais, ex. "jeudi 25 septembre 2026", jour de Paris."""
+    day = _as_paris_date(value)
+    first = "1er" if day.day == 1 else str(day.day)
+    return f"{WEEKDAYS[day.weekday()]} {first} {MONTHS[day.month - 1]} {day.year}"
+
+
+def day_heading(value: datetime | date, now: datetime | None = None) -> str:
+    """Titre de rubrique du journal : "Aujourd'hui", "Hier", sinon la date."""
+    day = _as_paris_date(value)
+    today = to_paris(now or datetime.now(tz=UTC)).date()
+    if day == today:
+        return "Aujourd'hui"
+    if day == today - timedelta(days=1):
+        return "Hier"
+    return day_label(day).capitalize()
+
+
+def time_of_day(value: datetime) -> str:
+    """Heure a la francaise, ex. "14h05"."""
+    return to_paris(value).strftime("%Hh%M")
+
+
+def by_day(rows: Iterable[Any]) -> list[tuple[date, list[Any]]]:
+    """Regroupe des ArticleRow deja tries par jour de publication, heure de Paris.
+
+    Preserve l'ordre : la requete trie deja par published_at decroissant, un tri
+    ici masquerait une regression de la requete au lieu de la montrer. Un
+    article publie a 23h30 UTC en ete appartient au lendemain parisien : c'est
+    la date que le lecteur a vecue qui compte, pas celle du serveur.
+    """
+    groups: list[tuple[date, list[Any]]] = []
+    for row in rows:
+        day = to_paris(row.article.published_at).date()
+        if groups and groups[-1][0] == day:
+            groups[-1][1].append(row)
+        else:
+            groups.append((day, [row]))
+    return groups
 
 
 def relative_date(value: datetime, now: datetime | None = None) -> str:
@@ -153,6 +219,10 @@ FILTERS = {
     "datetime_attr": datetime_attr,
     "absolute_date": absolute_date,
     "relative_date": relative_date,
+    "day_label": day_label,
+    "day_heading": day_heading,
+    "time_of_day": time_of_day,
+    "by_day": by_day,
     "duration": duration,
     "gap_label": gap_label,
     "error_kind": error_kind,

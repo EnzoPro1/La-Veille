@@ -4,16 +4,22 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <title>{% block title %}veille{% endblock %}</title>
+  <title>{% block title %}La Veille{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
 </head>
 <body>
-  <header class="topbar">
-    <a class="brand" href="/">veille</a>
-    <nav>
-      <a href="/">Articles</a>
-      <a href="/feeds">Flux</a>
-      <a href="/coverage">Couverture</a>
+  {% set path = request.url.path %}
+  <header class="masthead" id="une">
+    <div class="masthead-strip">
+      <span>{{ now | day_label | capitalize }}</span>
+      <span class="masthead-edition">Édition de {{ now | time_of_day }}</span>
+    </div>
+    <a class="masthead-title" href="/">La Veille</a>
+    <p class="masthead-tagline">Intelligence artificielle &amp; cybersécurité — la presse du jour, sans tri ni publicité</p>
+    <nav class="masthead-nav" aria-label="Rubriques">
+      <a href="/" {% if path == '/' %}aria-current="page"{% endif %}>Le journal</a>
+      <a href="/feeds" {% if path == '/feeds' %}aria-current="page"{% endif %}>Les sources</a>
+      <a href="/coverage" {% if path == '/coverage' %}aria-current="page"{% endif %}>La couverture</a>
     </nav>
   </header>
 
@@ -24,5 +30,6 @@
   <footer>
     <p>Heures affichées en Europe/Paris. Stockage en UTC.</p>
   </footer>
+  {% block scripts %}{% endblock %}
 </body>
 </html>

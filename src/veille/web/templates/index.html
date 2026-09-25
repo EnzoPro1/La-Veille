@@ -1,73 +1,103 @@
 {% extends "base.html" %}
-{% block title %}veille — articles{% endblock %}
+{% block title %}La Veille — le journal{% endblock %}
+
+{# Lien vers la une avec d'autres filtres. lang et topic sont des Literal valides
+   par FastAPI : aucune valeur libre n'atteint l'URL. #}
+{% macro with_filters(new_lang, new_topic) -%}
+  /{% if new_lang or new_topic %}?{% endif %}
+  {%- if new_lang %}lang={{ new_lang }}{% endif %}
+  {%- if new_lang and new_topic %}&amp;{% endif %}
+  {%- if new_topic %}topic={{ new_topic }}{% endif %}
+{%- endmacro %}
 
 {% block content %}
 {# Aucun |safe dans ce fichier : tout le contenu venant des flux est echappe
    par Jinja. Le resume passe par le filtre `excerpt` qui rend du texte brut. #}
-<form class="filters" method="get" action="/">
-  <label>
-    Langue
-    <select name="lang">
-      <option value="" {% if not lang %}selected{% endif %}>toutes</option>
-      <option value="fr" {% if lang == 'fr' %}selected{% endif %}>français</option>
-      <option value="en" {% if lang == 'en' %}selected{% endif %}>anglais</option>
-    </select>
-  </label>
-  <label>
-    Thème
-    <select name="topic">
-      <option value="" {% if not topic %}selected{% endif %}>tous</option>
-      <option value="ai" {% if topic == 'ai' %}selected{% endif %}>IA</option>
-      <option value="sec" {% if topic == 'sec' %}selected{% endif %}>Cyber</option>
-      <option value="both" {% if topic == 'both' %}selected{% endif %}>mixtes</option>
-    </select>
-  </label>
-  <button type="submit">Filtrer</button>
+<nav class="sections" aria-label="Filtres">
+  <div class="section-group">
+    <span class="section-label">Thème</span>
+    {% for value, label in [(None, 'Tout'), ('ai', 'IA'), ('sec', 'Cyber'), ('both', 'Mixtes')] %}
+      <a href="{{ with_filters(lang, value) }}" {% if topic == value %}aria-current="true"{% endif %}>{{ label }}</a>
+    {% endfor %}
+  </div>
+  <div class="section-group">
+    <span class="section-label">Langue</span>
+    {% for value, label in [(None, 'Toutes'), ('fr', 'Français'), ('en', 'Anglais')] %}
+      <a href="{{ with_filters(value, topic) }}" {% if lang == value %}aria-current="true"{% endif %}>{{ label }}</a>
+    {% endfor %}
+  </div>
   <span class="count">{{ page.total }} article{{ 's' if page.total > 1 else '' }}</span>
-</form>
+</nav>
 
 {% if not page.rows %}
   <p class="empty">Aucun article. Lancer <code>python -m veille ingest</code>.</p>
 {% else %}
-<ul class="articles">
-  {% for row in page.rows %}
-  <li class="article">
-    <h2>
-      <a href="{{ row.article.url_canonical }}" rel="noopener noreferrer" target="_blank">
-        {{ row.article.title }}
-      </a>
+<div class="journal" data-journal>
+  {% for day, rows in page.rows | by_day %}
+  <section class="day" data-day="{{ day.isoformat() }}">
+    {% set heading = day | day_heading(now) %}
+    <h2 class="day-heading">
+      <span>{{ heading }}</span>
+      {% if heading in ("Aujourd'hui", "Hier") %}<small>{{ day | day_label }}</small>{% endif %}
     </h2>
 
-    <p class="meta">
-      <span class="source">{{ row.feed.name }}</span>
-      <time datetime="{{ row.article.published_at | datetime_attr }}"
-            title="{{ row.article.published_at | absolute_date }}">
-        {{ row.article.published_at | relative_date(now) }}
-      </time>
-      {% if row.article.is_fallback %}
-        <span class="badge badge-warn" title="Le flux n'a fourni aucune date exploitable : date de collecte.">date approchée</span>
-      {% endif %}
-      <span class="badge badge-lang">{{ row.feed.lang | lang_label }}</span>
-      <span class="badge badge-topic">{{ row.feed.topic | topic_label }}</span>
-    </p>
+    <div class="day-grid">
+      {% for row in rows %}
+      {# La premiere de chaque jour fait la une. Quand journal.js recolle la
+         suite d'un jour deja affiche, il lui retire ce statut. #}
+      <article class="article" {% if loop.first %}data-lead{% endif %} lang="{{ row.feed.lang }}">
+        <p class="kicker">
+          <span class="source">{{ row.feed.name }}</span>
+          <span class="badge badge-topic">{{ row.feed.topic | topic_label }}</span>
+        </p>
 
-    {% set summary = row.article.summary_clean | excerpt %}
-    {% if summary %}
-      <p class="summary">{{ summary }}</p>
-    {% endif %}
-  </li>
+        <h3>
+          <a href="{{ row.article.url_canonical }}" rel="noopener noreferrer" target="_blank">
+            {{ row.article.title }}
+          </a>
+        </h3>
+
+        {% set summary = row.article.summary_clean | excerpt %}
+        {% if summary %}
+          <p class="summary">{{ summary }}</p>
+        {% endif %}
+
+        <p class="meta">
+          <time datetime="{{ row.article.published_at | datetime_attr }}"
+                title="{{ row.article.published_at | absolute_date }}">
+            {{ row.article.published_at | time_of_day }}
+            · {{ row.article.published_at | relative_date(now) }}
+          </time>
+          {% if row.article.is_fallback %}
+            <span class="badge badge-warn" title="Le flux n'a fourni aucune date exploitable : date de collecte.">date approchée</span>
+          {% endif %}
+          <span class="badge badge-lang">{{ row.feed.lang | lang_label }}</span>
+        </p>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
   {% endfor %}
-</ul>
+</div>
 
-<nav class="pagination">
+{# Sans JavaScript, la pagination reste la navigation. Avec, journal.js
+   charge la page suivante en fin de lecture et la colle a la suite. #}
+<nav class="pagination" data-pagination>
   {% set base = '?' ~ ('lang=' ~ lang ~ '&' if lang else '') ~ ('topic=' ~ topic ~ '&' if topic else '') %}
   {% if page.has_previous %}
-    <a href="{{ base }}page={{ page.page - 1 }}">← précédent</a>
+    <a href="{{ base }}page={{ page.page - 1 }}" rel="prev">← précédent</a>
   {% endif %}
   <span>page {{ page.page }} / {{ page.pages }}</span>
   {% if page.has_next %}
-    <a href="{{ base }}page={{ page.page + 1 }}">suivant →</a>
+    <a href="{{ base }}page={{ page.page + 1 }}" rel="next" data-next>suivant →</a>
+  {% else %}
+    <span class="the-end">— Fin du journal —</span>
   {% endif %}
 </nav>
+<a class="back-to-top" href="#une" aria-label="Revenir en haut">↑ La une</a>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='/journal.js') }}" defer></script>
 {% endblock %}

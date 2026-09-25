@@ -6,6 +6,39 @@ couverture temporelle.
 
 Le conteneur est le seul environnement d'exécution. Rien ne tourne sur l'hôte.
 
+## Aperçu
+
+La page d'accueil se lit comme un journal : une manchette, puis les articles
+regroupés par jour de parution, du plus récent au plus ancien, sans fin.
+
+![La une, thème clair](docs/screenshots/journal-clair.png)
+
+<table>
+  <tr>
+    <td width="72%"><img src="docs/screenshots/journal-sombre.png" alt="Thème sombre"></td>
+    <td><img src="docs/screenshots/journal-mobile.png" alt="Sur mobile"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Thème sombre, suivi automatique du système</sub></td>
+    <td align="center"><sub>Sur mobile</sub></td>
+  </tr>
+</table>
+
+- **Une rubrique par jour**, au jour de Paris : un article publié à 23 h 30 UTC
+  en été appartient au lendemain. « Aujourd'hui » et « Hier » sont nommés.
+- **Une carte par article** : source, thème, titre, puis le début du résumé
+  (7 lignes au plus), l'heure et la langue. Toute la carte mène à l'article.
+- **La une du jour** : le premier article de chaque jour occupe deux colonnes,
+  avec gros titre et lettrine.
+- **Un journal sans fin** : en approchant du bas, la page suivante se charge et
+  se colle à la suite ; un jour à cheval sur deux pages reste une seule
+  rubrique. Sans JavaScript, la pagination classique reste la navigation.
+- **Filtres en un clic** par thème (IA, Cyber, mixtes) et par langue,
+  combinables.
+- **Rien n'est chargé depuis un tiers** : polices système, aucun script
+  externe, `referrer` coupé sur les liens sortants. Le contenu des flux reste
+  du texte échappé, jamais du HTML injecté (aucun `|safe`).
+
 ## Lancement
 
 ```bash

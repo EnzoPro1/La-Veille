@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,7 +16,15 @@ from conftest import NOW, make_feed, read_fixture
 from veille.ingest.parse import parse_feed
 from veille.ingest.store import store_entries
 from veille.models import Article, Feed, FeedRun
-from veille.web.filters import excerpt, relative_date, to_paris
+from veille.web.filters import (
+    by_day,
+    day_heading,
+    day_label,
+    excerpt,
+    relative_date,
+    time_of_day,
+    to_paris,
+)
 
 pytestmark = pytest.mark.db
 
@@ -367,6 +376,44 @@ def test_conversion_to_paris_happens_only_at_render_time() -> None:
     utc_value = datetime(2026, 8, 19, 12, 0, tzinfo=UTC)
     assert to_paris(utc_value).hour == 14  # CEST en aout
     assert utc_value.hour == 12, "la valeur d'origine reste en UTC"
+
+
+def test_day_labels_are_french_and_locale_independent() -> None:
+    assert day_label(date(2026, 9, 24)) == "jeudi 24 septembre 2026"
+    assert day_label(date(2026, 8, 1)) == "samedi 1er août 2026"
+    assert time_of_day(datetime(2026, 8, 19, 12, 5, tzinfo=UTC)) == "14h05"
+
+
+def test_day_heading_names_today_and_yesterday() -> None:
+    now = datetime(2026, 9, 25, 10, 0, tzinfo=UTC)
+    assert day_heading(date(2026, 9, 25), now) == "Aujourd'hui"
+    assert day_heading(date(2026, 9, 24), now) == "Hier"
+    assert day_heading(date(2026, 9, 23), now) == "Mercredi 23 septembre 2026"
+    # 23h30 UTC le 24 septembre, c'est deja le 25 a Paris
+    assert day_heading(datetime(2026, 9, 24, 23, 30, tzinfo=UTC), now) == "Aujourd'hui"
+
+
+def test_by_day_groups_on_the_paris_date_and_keeps_order() -> None:
+    def row(when: datetime) -> SimpleNamespace:
+        return SimpleNamespace(article=SimpleNamespace(published_at=when))
+
+    rows = [
+        row(datetime(2026, 8, 19, 22, 30, tzinfo=UTC)),  # 20 aout 00h30 a Paris
+        row(datetime(2026, 8, 19, 21, 0, tzinfo=UTC)),  # 19 aout 23h00 a Paris
+        row(datetime(2026, 8, 19, 8, 0, tzinfo=UTC)),
+    ]
+    groups = by_day(rows)
+    assert [day for day, _ in groups] == [date(2026, 8, 20), date(2026, 8, 19)]
+    assert [len(items) for _, items in groups] == [1, 2]
+    assert groups[1][1] == rows[1:]
+
+
+def test_index_is_split_into_days_with_one_lead_each(session: Session, client: TestClient) -> None:
+    ingest(session, make_feed(session, "sain"), "rss20_ok.xml")
+    body = client.get("/").text
+    n_days = body.count('class="day"')
+    assert n_days >= 1
+    assert body.count("data-lead") == n_days
 
 
 def test_excerpt_returns_plain_text() -> None:
